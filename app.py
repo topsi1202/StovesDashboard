@@ -17,14 +17,24 @@ if uploaded_file:
 
     df = pd.read_excel(uploaded_file)
 
-    # ---------- ניקוי ----------
+    # ---------- ניקוי בסיסי ----------
     df.columns = df.columns.str.strip()
 
-    # ---------- מלאי בטוח ----------
-    df["מלאי"] = pd.to_numeric(df["מלאי"], errors="coerce").fillna(0)
+    # ---------- המרות בטוחות ----------
+    for col in ["חברה", "דגם", "סוג", "צבע"]:
+        if col in df.columns:
+            df[col] = df[col].astype(str).fillna("")
 
-    # ---------- יצירת שאילתא ----------
-    df["שאילתא"] = df["חברה"] + " " + df["דגם"]
+    if "מלאי" in df.columns:
+        df["מלאי"] = pd.to_numeric(df["מלאי"], errors="coerce").fillna(0)
+    else:
+        df["מלאי"] = 0
+
+    # ---------- יצירת שאילתא בטוחה ----------
+    df["שאילתא"] = (
+        df["חברה"].astype(str).fillna("") + " " +
+        df["דגם"].astype(str).fillna("")
+    )
 
     # ---------- לינקים ----------
     df["גוגל"] = df["שאילתא"].apply(
@@ -59,7 +69,7 @@ if uploaded_file:
         st.metric("סה״כ מלאי", int(df["מלאי"].sum()))
 
     with col3:
-        st.metric("דגמים שונים", df["דגם"].nunique())
+        st.metric("דגמים", df["דגם"].nunique())
 
     # ---------- פילטרים ----------
     company = st.sidebar.multiselect("חברה", df["חברה"].unique())
@@ -81,11 +91,11 @@ if uploaded_file:
 
     if search:
         filtered = filtered[
-            filtered["דגם"].astype(str).str.contains(search, case=False, na=False)
+            filtered["דגם"].str.contains(search, case=False, na=False)
         ]
 
     # ---------- טבלה ----------
-    st.subheader("📊 טבלת מלאי עם קישורים")
+    st.subheader("📊 נתוני מלאי עם קישורים")
 
     st.dataframe(
         filtered,
@@ -102,10 +112,10 @@ if uploaded_file:
     # ---------- גרף ----------
     st.subheader("📈 מלאי לפי חברה")
 
-    chart = px.bar(
+    fig = px.bar(
         filtered,
         x="חברה",
         y="מלאי"
     )
 
-    st.plotly_chart(chart, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True)
