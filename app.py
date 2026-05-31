@@ -16,15 +16,21 @@ if uploaded_file:
 
     df = pd.read_excel(uploaded_file)
 
-    # ---------- ניקוי שמות עמודות ----------
+    # ---------- ניקוי בסיסי ----------
     df.columns = df.columns.str.strip()
 
-    # ---------- ניקוי טקסט בכל השדות החשובים ----------
+    # ניקוי טקסט עמוק (רווחים כפולים וכו')
     for col in ["חברה", "דגם", "סוג", "צבע"]:
         if col in df.columns:
-            df[col] = df[col].astype(str).str.strip().fillna("")
+            df[col] = (
+                df[col]
+                .astype(str)
+                .str.strip()
+                .str.replace(r"\s+", " ", regex=True)
+                .fillna("")
+            )
 
-    # ---------- תיקון מלאי ----------
+    # ---------- מלאי ----------
     if "מלאי" in df.columns:
         df["מלאי"] = pd.to_numeric(df["מלאי"], errors="coerce").fillna(0)
     else:
@@ -40,25 +46,31 @@ if uploaded_file:
 
     col1.metric("סה״כ פריטים", len(df))
     col2.metric("סה״כ מלאי", int(df["מלאי"].sum()))
-    col3.metric("מלאי נמוך (≤2)", len(df[df["מלאי"] <= 2]))
+    col3.metric("מלאי נמוך", len(df[df["מלאי"] <= 2]))
     col4.metric("אזל מהמלאי", len(df[df["מלאי"] == 0]))
 
     st.divider()
 
-    # ---------- פילטרים (עם ניקוי כפילויות) ----------
+    # ---------- פילטרים ----------
     colf1, colf2, colf3 = st.columns(3)
 
     with colf1:
-        company = st.multiselect("חברה", sorted(df["חברה"].dropna().unique()))
+        company = st.multiselect(
+            "חברה",
+            sorted(df["חברה"].dropna().unique())
+        )
 
     with colf2:
         stove_type = st.multiselect(
             "סוג",
-            sorted(df["סוג"].dropna().str.strip().unique())
+            sorted(df["סוג"].dropna().unique())
         )
 
     with colf3:
-        color = st.multiselect("צבע", sorted(df["צבע"].dropna().unique()))
+        color = st.multiselect(
+            "צבע",
+            sorted(df["צבע"].dropna().unique())
+        )
 
     filtered = df.copy()
 
@@ -71,28 +83,38 @@ if uploaded_file:
     if color:
         filtered = filtered[filtered["צבע"].isin(color)]
 
-    # ---------- חיפוש ----------
-    search = st.text_input("🔎 חיפוש דגם / חברה")
+    # ---------- חיפוש חכם ----------
+    search = st.text_input("🔎 חיפוש (חברה / דגם)")
 
     if search:
+        search = search.strip()
         filtered = filtered[
-            filtered["דגם"].str.contains(search, case=False, na=False) |
-            filtered["חברה"].str.contains(search, case=False, na=False)
+            filtered["חברה"].str.contains(search, case=False, na=False) |
+            filtered["דגם"].str.contains(search, case=False, na=False)
         ]
 
     st.divider()
 
     # ---------- התראה ----------
-    low_df = filtered[filtered["מלאי"] <= 2]
+    low_stock = filtered[filtered["מלאי"] <= 2]
 
-    if not low_df.empty:
-        st.warning("⚠️ מלאי נמוך קיים במערכת")
-        st.dataframe(low_df[["חברה", "דגם", "מלאי"]], use_container_width=True)
+    if not low_stock.empty:
+        st.warning("⚠️ יש מוצרים עם מלאי נמוך")
+
+        st.dataframe(
+            low_stock[["חברה", "דגם", "מלאי"]],
+            use_container_width=True
+        )
 
     # ---------- טבלה ----------
     st.subheader("📊 נתוני מלאי")
 
-    st.dataframe(filtered, use_container_width=True)
+    styled = filtered.copy()
+
+    st.dataframe(
+        styled.sort_values("מלאי", ascending=False),
+        use_container_width=True
+    )
 
     st.divider()
 
@@ -102,16 +124,16 @@ if uploaded_file:
     with colg1:
         st.subheader("📈 מלאי לפי חברה")
 
-        fig = px.bar(
+        fig1 = px.bar(
             filtered,
             x="חברה",
             y="מלאי"
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig1, use_container_width=True)
 
     with colg2:
-        st.subheader("🥧 סוגים")
+        st.subheader("🥧 התפלגות סוגים")
 
         fig2 = px.pie(
             filtered,
@@ -121,12 +143,12 @@ if uploaded_file:
 
         st.plotly_chart(fig2, use_container_width=True)
 
-    # ---------- תובנה ----------
+    # ---------- תובנה חכמה ----------
     st.divider()
 
-    top = filtered.sort_values("מלאי", ascending=False).head(1)
+    top_item = filtered.sort_values("מלאי", ascending=False).head(1)
 
-    if not top.empty:
+    if not top_item.empty:
         st.success(
-            f"🔥 הכי הרבה מלאי: {top.iloc[0]['חברה']} {top.iloc[0]['דגם']} ({int(top.iloc[0]['מלאי'])})"
+            f"🔥 מוצר מוביל במלאי: {top_item.iloc[0]['חברה']} {top_item.iloc[0]['דגם']} ({int(top_item.iloc[0]['מלאי'])})"
         )
