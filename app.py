@@ -4,53 +4,65 @@ import plotly.express as px
 import sqlite3
 
 # =========================
-# 🎨 עיצוב נקי ומודרני
+# 🎨 UI CONFIG
 # =========================
 st.set_page_config(
-    page_title="מערכת ניהול מלאי",
+    page_title="מערכת מלאי פרימיום",
     layout="wide"
 )
 
 st.markdown("""
 <style>
-body {
-    background-color: #F5F7FB;
+/* רקע כללי נקי */
+.block-container {
+    padding: 2rem 2.5rem;
+    background-color: #F6F8FC;
+}
+
+/* כותרות */
+h1 {
+    font-size: 34px;
+    font-weight: 700;
     color: #111827;
 }
 
-.block-container {
-    padding-top: 2rem;
-    padding-left: 2rem;
-    padding-right: 2rem;
-}
-
-h1, h2, h3 {
+h2, h3 {
     color: #1F2937;
 }
 
+/* KPI Cards */
 [data-testid="metric-container"] {
-    background-color: white;
-    border: 1px solid #E5E7EB;
+    background: white;
+    border-radius: 14px;
     padding: 14px;
+    border: 1px solid #E5E7EB;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+/* Dataframe */
+div[data-testid="stDataFrame"] {
     border-radius: 12px;
-    box-shadow: 0px 1px 3px rgba(0,0,0,0.05);
-}
-
-.stDataFrame {
-    border-radius: 10px;
     overflow: hidden;
+    border: 1px solid #E5E7EB;
 }
 
-hr {
-    margin: 1.5rem 0;
+/* Buttons */
+.stButton > button {
+    background-color: #2563EB;
+    color: white;
+    border-radius: 10px;
+    padding: 0.5rem 1rem;
     border: none;
-    border-top: 1px solid #E5E7EB;
+}
+
+.stButton > button:hover {
+    background-color: #1D4ED8;
 }
 </style>
 """, unsafe_allow_html=True)
 
 # =========================
-# 🗄️ מסד נתונים
+# 🗄️ DB
 # =========================
 DB = "inventory.db"
 
@@ -83,9 +95,9 @@ def load():
 init_db()
 
 # =========================
-# 📥 טעינת קובץ
+# 📥 DATA
 # =========================
-uploaded_file = st.file_uploader("📦 העלה קובץ מלאי (Excel)", type=["xlsx"])
+uploaded_file = st.file_uploader("📦 העלה קובץ מלאי", type=["xlsx"])
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
@@ -105,55 +117,60 @@ if uploaded_file:
     df["stock"] = pd.to_numeric(df["stock"], errors="coerce").fillna(0)
 
     save(df)
-    st.success("✔ הנתונים נטענו למערכת")
+    st.success("✔ הנתונים נשמרו במערכת")
 
 # =========================
-# 📊 טעינת מערכת
+# 📊 LOAD
 # =========================
 df = load()
 
 if df.empty:
-    st.warning("אין נתונים במערכת – העלה קובץ")
+    st.warning("אין נתונים עדיין")
     st.stop()
 
 # =========================
-# 🧠 לוגיקה עסקית
+# 🧠 LOGIC
 # =========================
 df["SKU"] = df["company"] + " " + df["model"]
 
 def status(x):
     if x == 0:
-        return "🔴 אזל מהמלאי"
+        return "🔴 אזל"
     elif x <= 2:
-        return "🟠 מלאי נמוך"
+        return "🟠 נמוך"
     return "🟢 תקין"
 
 df["סטטוס"] = df["stock"].apply(status)
 
 # =========================
-# 🏠 כותרת
+# 🏠 HEADER
 # =========================
-st.title("📊 מערכת ניהול מלאי כיריים")
+st.title("📦 מערכת ניהול מלאי – גרסת פרימיום")
 
-st.markdown("---")
+st.markdown("### סקירה כללית של המלאי בזמן אמת")
 
-# =========================
-# 📌 KPI
-# =========================
-col1, col2, col3, col4, col5 = st.columns(5)
-
-col1.metric("סה״כ פריטים", len(df))
-col2.metric("סה״כ מלאי", int(df["stock"].sum()))
-col3.metric("אזל מהמלאי", int((df["stock"] == 0).sum()))
-col4.metric("מלאי נמוך", int((df["stock"] <= 2).sum()))
-col5.metric("מספר דגמים", df["model"].nunique())
-
-st.markdown("---")
+st.divider()
 
 # =========================
-# 🔎 חיפוש
+# 📊 KPI
 # =========================
-search = st.text_input("🔎 חיפוש לפי חברה / דגם")
+c1, c2, c3, c4, c5 = st.columns(5)
+
+c1.metric("פריטים", len(df))
+c2.metric("סה״כ מלאי", int(df["stock"].sum()))
+c3.metric("אזל", int((df["stock"] == 0).sum()))
+c4.metric("נמוך", int((df["stock"] <= 2).sum()))
+c5.metric("דגמים", df["model"].nunique())
+
+st.divider()
+
+# =========================
+# 🔎 SEARCH + FILTER AREA
+# =========================
+col1, col2 = st.columns([2, 3])
+
+with col1:
+    search = st.text_input("🔎 חיפוש חכם")
 
 filtered = df.copy()
 
@@ -162,19 +179,19 @@ if search:
         filtered["SKU"].str.contains(search, case=False, na=False)
     ]
 
-# =========================
-# 🎛 פילטרים
-# =========================
-colf1, colf2, colf3 = st.columns(3)
+with col2:
+    st.markdown("### פילטרים")
 
-with colf1:
-    company = st.multiselect("חברה", sorted(filtered["company"].unique()))
+    f1, f2, f3 = st.columns(3)
 
-with colf2:
-    type_f = st.multiselect("סוג", sorted(filtered["type"].unique()))
+    with f1:
+        company = st.multiselect("חברה", sorted(filtered["company"].unique()))
 
-with colf3:
-    color = st.multiselect("צבע", sorted(filtered["color"].unique()))
+    with f2:
+        type_f = st.multiselect("סוג", sorted(filtered["type"].unique()))
+
+    with f3:
+        color = st.multiselect("צבע", sorted(filtered["color"].unique()))
 
 if company:
     filtered = filtered[filtered["company"].isin(company)]
@@ -185,10 +202,10 @@ if type_f:
 if color:
     filtered = filtered[filtered["color"].isin(color)]
 
-st.markdown("---")
+st.divider()
 
 # =========================
-# 🚨 התראות
+# 🚨 ALERTS
 # =========================
 low = filtered[filtered["stock"] <= 2]
 zero = filtered[filtered["stock"] == 0]
@@ -200,7 +217,7 @@ if len(low) > 0:
     st.warning(f"⚠️ מלאי נמוך: {len(low)} מוצרים")
 
 # =========================
-# 📋 טבלה
+# 📋 TABLE
 # =========================
 st.subheader("📦 נתוני מלאי")
 
@@ -209,14 +226,14 @@ st.dataframe(
     use_container_width=True
 )
 
-st.markdown("---")
+st.divider()
 
 # =========================
-# 📊 גרפים
+# 📊 CHARTS
 # =========================
-colg1, colg2 = st.columns(2)
+g1, g2 = st.columns(2)
 
-with colg1:
+with g1:
     st.subheader("📈 מלאי לפי חברה")
 
     fig1 = px.bar(
@@ -227,7 +244,7 @@ with colg1:
 
     st.plotly_chart(fig1, use_container_width=True)
 
-with colg2:
+with g2:
     st.subheader("🥧 סטטוס מלאי")
 
     fig2 = px.pie(
@@ -239,9 +256,9 @@ with colg2:
     st.plotly_chart(fig2, use_container_width=True)
 
 # =========================
-# 🧠 תובנה
+# 🧠 INSIGHT
 # =========================
-st.markdown("---")
+st.divider()
 
 if len(filtered) > 0:
     top = filtered.sort_values("stock", ascending=False).iloc[0]
