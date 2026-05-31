@@ -7,6 +7,13 @@ st.set_page_config(
     layout="wide"
 )
 
+# ---------- CACHE לטעינה מהירה ----------
+@st.cache_data
+def load_data(file):
+    df = pd.read_excel(file)
+    df.columns = df.columns.str.strip()
+    return df
+
 uploaded_file = st.file_uploader(
     "העלה קובץ מלאי",
     type=["xlsx"]
@@ -14,12 +21,9 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file:
 
-    df = pd.read_excel(uploaded_file)
+    df = load_data(uploaded_file)
 
-    # ---------- ניקוי בסיסי ----------
-    df.columns = df.columns.str.strip()
-
-    # ניקוי טקסט עמוק (רווחים כפולים וכו')
+    # ---------- ניקוי מתקדם ----------
     for col in ["חברה", "דגם", "סוג", "צבע"]:
         if col in df.columns:
             df[col] = (
@@ -30,24 +34,20 @@ if uploaded_file:
                 .fillna("")
             )
 
-    # ---------- מלאי ----------
     if "מלאי" in df.columns:
         df["מלאי"] = pd.to_numeric(df["מלאי"], errors="coerce").fillna(0)
     else:
         df["מלאי"] = 0
 
-    # ---------- שאילתא ----------
-    df["שאילתא"] = df["חברה"] + " " + df["דגם"]
-
-    # ---------- KPIs ----------
+    # ---------- KPI ----------
     st.title("📦 דשבורד מלאי כיריים")
 
     col1, col2, col3, col4 = st.columns(4)
 
-    col1.metric("סה״כ פריטים", len(df))
+    col1.metric("פריטים", len(df))
     col2.metric("סה״כ מלאי", int(df["מלאי"].sum()))
-    col3.metric("מלאי נמוך", len(df[df["מלאי"] <= 2]))
-    col4.metric("אזל מהמלאי", len(df[df["מלאי"] == 0]))
+    col3.metric("אזל מהמלאי", int((df["מלאי"] == 0).sum()))
+    col4.metric("מלאי נמוך", int((df["מלאי"] <= 2).sum()))
 
     st.divider()
 
@@ -55,22 +55,13 @@ if uploaded_file:
     colf1, colf2, colf3 = st.columns(3)
 
     with colf1:
-        company = st.multiselect(
-            "חברה",
-            sorted(df["חברה"].dropna().unique())
-        )
+        company = st.multiselect("חברה", sorted(df["חברה"].unique()))
 
     with colf2:
-        stove_type = st.multiselect(
-            "סוג",
-            sorted(df["סוג"].dropna().unique())
-        )
+        stove_type = st.multiselect("סוג", sorted(df["סוג"].unique()))
 
     with colf3:
-        color = st.multiselect(
-            "צבע",
-            sorted(df["צבע"].dropna().unique())
-        )
+        color = st.multiselect("צבע", sorted(df["צבע"].unique()))
 
     filtered = df.copy()
 
@@ -84,7 +75,7 @@ if uploaded_file:
         filtered = filtered[filtered["צבע"].isin(color)]
 
     # ---------- חיפוש חכם ----------
-    search = st.text_input("🔎 חיפוש (חברה / דגם)")
+    search = st.text_input("🔎 חיפוש חכם (חברה / דגם)")
 
     if search:
         search = search.strip()
@@ -95,37 +86,37 @@ if uploaded_file:
 
     st.divider()
 
-    # ---------- התראה ----------
+    # ---------- התראות ----------
     low_stock = filtered[filtered["מלאי"] <= 2]
 
-    if not low_stock.empty:
-        st.warning("⚠️ יש מוצרים עם מלאי נמוך")
+    if len(low_stock) > 0:
+        st.warning(f"⚠️ נמצאו {len(low_stock)} פריטים עם מלאי נמוך")
 
         st.dataframe(
-            low_stock[["חברה", "דגם", "מלאי"]],
+            low_stock.sort_values("מלאי"),
             use_container_width=True
         )
 
-    # ---------- טבלה ----------
-    st.subheader("📊 נתוני מלאי")
-
-    styled = filtered.copy()
+    # ---------- טבלה ראשית ----------
+    st.subheader("📊 מלאי לפי דגמים")
 
     st.dataframe(
-        styled.sort_values("מלאי", ascending=False),
+        filtered.sort_values("מלאי", ascending=False),
         use_container_width=True
     )
 
     st.divider()
 
-    # ---------- גרפים ----------
+    # ---------- גרפים חכמים ----------
     colg1, colg2 = st.columns(2)
 
     with colg1:
-        st.subheader("📈 מלאי לפי חברה")
+        st.subheader("📈 טופ חברות לפי מלאי")
+
+        top_company = filtered.groupby("חברה")["מלאי"].sum().reset_index()
 
         fig1 = px.bar(
-            filtered,
+            top_company.sort_values("מלאי", ascending=False).head(10),
             x="חברה",
             y="מלאי"
         )
@@ -133,7 +124,7 @@ if uploaded_file:
         st.plotly_chart(fig1, use_container_width=True)
 
     with colg2:
-        st.subheader("🥧 התפלגות סוגים")
+        st.subheader("🥧 סוגי כיריים")
 
         fig2 = px.pie(
             filtered,
@@ -146,9 +137,9 @@ if uploaded_file:
     # ---------- תובנה חכמה ----------
     st.divider()
 
-    top_item = filtered.sort_values("מלאי", ascending=False).head(1)
+    if len(filtered) > 0:
+        top_item = filtered.sort_values("מלאי", ascending=False).iloc[0]
 
-    if not top_item.empty:
         st.success(
-            f"🔥 מוצר מוביל במלאי: {top_item.iloc[0]['חברה']} {top_item.iloc[0]['דגם']} ({int(top_item.iloc[0]['מלאי'])})"
+            f"🔥 הפריט החזק ביותר: {top_item['חברה']} {top_item['דגם']} ({int(top_item['מלאי'])})"
         )
