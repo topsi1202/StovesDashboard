@@ -1,68 +1,65 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 import sqlite3
+import plotly.express as px
 
 # =========================
-# 🎨 UI CONFIG
+# 🎨 GECKOBOARD STYLE UI
 # =========================
 st.set_page_config(
-    page_title="מערכת מלאי פרימיום",
+    page_title="Inventory Control Center",
     layout="wide"
 )
 
 st.markdown("""
 <style>
-/* רקע כללי נקי */
+body {
+    background-color: #0F1226;
+    color: #E5E7EB;
+}
+
+/* main app background */
 .block-container {
-    padding: 2rem 2.5rem;
-    background-color: #F6F8FC;
+    padding: 1.5rem 2rem;
 }
 
-/* כותרות */
-h1 {
-    font-size: 34px;
-    font-weight: 700;
-    color: #111827;
-}
-
-h2, h3 {
-    color: #1F2937;
-}
-
-/* KPI Cards */
+/* KPI cards */
 [data-testid="metric-container"] {
-    background: white;
+    background: #171A33;
+    border: 1px solid #2A2F55;
+    padding: 16px;
     border-radius: 14px;
-    padding: 14px;
-    border: 1px solid #E5E7EB;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.25);
 }
 
-/* Dataframe */
+/* tables */
 div[data-testid="stDataFrame"] {
+    background-color: #171A33;
     border-radius: 12px;
     overflow: hidden;
-    border: 1px solid #E5E7EB;
+    border: 1px solid #2A2F55;
 }
 
-/* Buttons */
-.stButton > button {
-    background-color: #2563EB;
-    color: white;
-    border-radius: 10px;
-    padding: 0.5rem 1rem;
-    border: none;
+/* headers */
+h1, h2, h3 {
+    color: #E5E7EB;
 }
 
-.stButton > button:hover {
-    background-color: #1D4ED8;
+/* sidebar */
+section[data-testid="stSidebar"] {
+    background-color: #11142A;
+}
+
+/* divider */
+hr {
+    border: 1px solid #2A2F55;
+    margin: 1rem 0;
 }
 </style>
 """, unsafe_allow_html=True)
 
 # =========================
-# 🗄️ DB
+# 🗄️ DATABASE
 # =========================
 DB = "inventory.db"
 
@@ -88,14 +85,12 @@ def save(df):
 
 def load():
     conn = sqlite3.connect(DB)
-    df = pd.read_sql("SELECT * FROM inventory", conn)
-    conn.close()
-    return df
+    return pd.read_sql("SELECT * FROM inventory", conn)
 
 init_db()
 
 # =========================
-# 📥 DATA
+# 📥 LOAD DATA
 # =========================
 uploaded_file = st.file_uploader("📦 העלה קובץ מלאי", type=["xlsx"])
 
@@ -117,7 +112,7 @@ if uploaded_file:
     df["stock"] = pd.to_numeric(df["stock"], errors="coerce").fillna(0)
 
     save(df)
-    st.success("✔ הנתונים נשמרו במערכת")
+    st.success("✔ נתונים נטענו למערכת")
 
 # =========================
 # 📊 LOAD
@@ -125,52 +120,48 @@ if uploaded_file:
 df = load()
 
 if df.empty:
-    st.warning("אין נתונים עדיין")
+    st.warning("אין נתונים במערכת")
     st.stop()
 
 # =========================
-# 🧠 LOGIC
+# 🧠 ENGINE
 # =========================
 df["SKU"] = df["company"] + " " + df["model"]
 
-def status(x):
-    if x == 0:
-        return "🔴 אזל"
-    elif x <= 2:
-        return "🟠 נמוך"
-    return "🟢 תקין"
-
-df["סטטוס"] = df["stock"].apply(status)
+df["סטטוס"] = df["stock"].apply(
+    lambda x: "🔴 אזל" if x == 0 else ("🟠 נמוך" if x <= 2 else "🟢 תקין")
+)
 
 # =========================
 # 🏠 HEADER
 # =========================
-st.title("📦 מערכת ניהול מלאי – גרסת פרימיום")
+st.title("📊 מרכז בקרה למלאי – Inventory Control Center")
 
-st.markdown("### סקירה כללית של המלאי בזמן אמת")
-
-st.divider()
+st.markdown("---")
 
 # =========================
-# 📊 KPI
+# 📌 KPI ROW (like dashboard cards)
 # =========================
-c1, c2, c3, c4, c5 = st.columns(5)
+c1, c2, c3, c4 = st.columns(4)
 
-c1.metric("פריטים", len(df))
+c1.metric("סה״כ פריטים", len(df))
 c2.metric("סה״כ מלאי", int(df["stock"].sum()))
-c3.metric("אזל", int((df["stock"] == 0).sum()))
-c4.metric("נמוך", int((df["stock"] <= 2).sum()))
-c5.metric("דגמים", df["model"].nunique())
+c3.metric("אזל מהמלאי", int((df["stock"] == 0).sum()))
+c4.metric("מלאי נמוך", int((df["stock"] <= 2).sum()))
 
-st.divider()
+st.markdown("---")
 
 # =========================
-# 🔎 SEARCH + FILTER AREA
+# 🔎 SEARCH + FILTER PANEL
 # =========================
-col1, col2 = st.columns([2, 3])
+col1, col2 = st.columns([1, 3])
 
 with col1:
-    search = st.text_input("🔎 חיפוש חכם")
+    search = st.text_input("🔎 חיפוש")
+
+    company = st.multiselect("חברה", sorted(df["company"].unique()))
+    type_f = st.multiselect("סוג", sorted(df["type"].unique()))
+    color = st.multiselect("צבע", sorted(df["color"].unique()))
 
 filtered = df.copy()
 
@@ -178,20 +169,6 @@ if search:
     filtered = filtered[
         filtered["SKU"].str.contains(search, case=False, na=False)
     ]
-
-with col2:
-    st.markdown("### פילטרים")
-
-    f1, f2, f3 = st.columns(3)
-
-    with f1:
-        company = st.multiselect("חברה", sorted(filtered["company"].unique()))
-
-    with f2:
-        type_f = st.multiselect("סוג", sorted(filtered["type"].unique()))
-
-    with f3:
-        color = st.multiselect("צבע", sorted(filtered["color"].unique()))
 
 if company:
     filtered = filtered[filtered["company"].isin(company)]
@@ -202,65 +179,70 @@ if type_f:
 if color:
     filtered = filtered[filtered["color"].isin(color)]
 
-st.divider()
+# =========================
+# 🚨 ALERTS PANEL
+# =========================
+st.markdown("## ⚠ התראות מערכת")
+
+a1, a2 = st.columns(2)
+
+with a1:
+    st.error(f"🔴 אזל מהמלאי: {(filtered['stock'] == 0).sum()}")
+
+with a2:
+    st.warning(f"🟠 מלאי נמוך: {(filtered['stock'] <= 2).sum()}")
+
+st.markdown("---")
 
 # =========================
-# 🚨 ALERTS
+# 📊 MAIN GRID (LIKE IMAGE)
 # =========================
-low = filtered[filtered["stock"] <= 2]
-zero = filtered[filtered["stock"] == 0]
+left, middle, right = st.columns([1.2, 1.2, 2.6])
 
-if len(zero) > 0:
-    st.error(f"❌ אזל מהמלאי: {len(zero)} מוצרים")
+# LEFT PANEL
+with left:
+    st.subheader("⏳ מלאי נמוך בזמן")
 
-if len(low) > 0:
-    st.warning(f"⚠️ מלאי נמוך: {len(low)} מוצרים")
+    low = filtered.sort_values("stock").head(10)
+    st.dataframe(low, use_container_width=True)
+
+# MIDDLE PANEL
+with middle:
+    st.subheader("📈 סטטוס מלאי")
+
+    fig = px.pie(
+        filtered,
+        names="סטטוס",
+        values="stock"
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+# RIGHT PANEL
+with right:
+    st.subheader("📦 מלאי מלא לפי חברה")
+
+    fig2 = px.bar(
+        filtered.groupby("company")["stock"].sum().reset_index(),
+        x="company",
+        y="stock"
+    )
+    st.plotly_chart(fig2, use_container_width=True)
+
+st.markdown("---")
 
 # =========================
-# 📋 TABLE
+# 📋 FULL TABLE (CONTROL CENTER)
 # =========================
-st.subheader("📦 נתוני מלאי")
+st.subheader("🧾 טבלת שליטה מרכזית")
 
 st.dataframe(
     filtered.sort_values("stock", ascending=False),
     use_container_width=True
 )
 
-st.divider()
-
-# =========================
-# 📊 CHARTS
-# =========================
-g1, g2 = st.columns(2)
-
-with g1:
-    st.subheader("📈 מלאי לפי חברה")
-
-    fig1 = px.bar(
-        filtered.groupby("company")["stock"].sum().reset_index(),
-        x="company",
-        y="stock"
-    )
-
-    st.plotly_chart(fig1, use_container_width=True)
-
-with g2:
-    st.subheader("🥧 סטטוס מלאי")
-
-    fig2 = px.pie(
-        filtered,
-        names="סטטוס",
-        values="stock"
-    )
-
-    st.plotly_chart(fig2, use_container_width=True)
-
 # =========================
 # 🧠 INSIGHT
 # =========================
-st.divider()
-
 if len(filtered) > 0:
     top = filtered.sort_values("stock", ascending=False).iloc[0]
-
     st.success(f"⭐ מוצר מוביל: {top['SKU']} ({int(top['stock'])})")
