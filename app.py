@@ -4,62 +4,94 @@ import sqlite3
 import plotly.express as px
 
 # =========================
-# 🎨 GECKOBOARD STYLE UI
+# 🎨 UI FIXED PREMIUM STYLE
 # =========================
 st.set_page_config(
-    page_title="Inventory Control Center",
+    page_title="AI CONTROL NEXT",
     layout="wide"
 )
 
 st.markdown("""
 <style>
-body {
-    background-color: #0F1226;
+
+/* ===== MAIN BACKGROUND (FIXED) ===== */
+.stApp {
+    background: linear-gradient(180deg, #0B1220 0%, #0F1B2D 100%);
     color: #E5E7EB;
 }
 
-/* main app background */
+/* ===== CONTAINER ===== */
 .block-container {
-    padding: 1.5rem 2rem;
+    padding: 2rem 2.5rem;
 }
 
-/* KPI cards */
+/* ===== HEADINGS ===== */
+h1 {
+    color: #60A5FA !important;
+    font-weight: 800;
+}
+
+h2, h3 {
+    color: #E5E7EB !important;
+}
+
+/* ===== KPI CARDS (FIXED VISIBILITY) ===== */
 [data-testid="metric-container"] {
-    background: #171A33;
-    border: 1px solid #2A2F55;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     padding: 16px;
-    border-radius: 14px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+    border-radius: 16px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.35);
 }
 
-/* tables */
+/* ===== DATAFRAME (CLEAN GRID) ===== */
 div[data-testid="stDataFrame"] {
-    background-color: #171A33;
-    border-radius: 12px;
-    overflow: hidden;
-    border: 1px solid #2A2F55;
+    background: rgba(255,255,255,0.03);
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.1);
 }
 
-/* headers */
-h1, h2, h3 {
-    color: #E5E7EB;
-}
-
-/* sidebar */
+/* ===== SIDEBAR ===== */
 section[data-testid="stSidebar"] {
-    background-color: #11142A;
+    background-color: #0A0F1C;
 }
 
-/* divider */
-hr {
-    border: 1px solid #2A2F55;
-    margin: 1rem 0;
+/* ===== INPUTS ===== */
+input, .stTextInput > div > div > input {
+    background-color: rgba(255,255,255,0.05);
+    color: white;
+    border-radius: 10px;
 }
+
+/* ===== SELECT BOXES ===== */
+div[data-baseweb="select"] {
+    background-color: rgba(255,255,255,0.05);
+}
+
+/* ===== DIVIDERS ===== */
+hr {
+    border: 1px solid rgba(255,255,255,0.08);
+}
+
+/* ===== BUTTONS ===== */
+.stButton > button {
+    background: linear-gradient(90deg, #3B82F6, #2563EB);
+    color: white;
+    border-radius: 10px;
+    border: none;
+    padding: 0.5rem 1rem;
+}
+
+.stButton > button:hover {
+    background: linear-gradient(90deg, #2563EB, #1D4ED8);
+}
+
 </style>
 """, unsafe_allow_html=True)
 
 # =========================
-# 🗄️ DATABASE
+# 🗄️ DB
 # =========================
 DB = "inventory.db"
 
@@ -90,7 +122,7 @@ def load():
 init_db()
 
 # =========================
-# 📥 LOAD DATA
+# 📥 DATA
 # =========================
 uploaded_file = st.file_uploader("📦 העלה קובץ מלאי", type=["xlsx"])
 
@@ -120,7 +152,7 @@ if uploaded_file:
 df = load()
 
 if df.empty:
-    st.warning("אין נתונים במערכת")
+    st.warning("אין נתונים")
     st.stop()
 
 # =========================
@@ -133,31 +165,31 @@ df["סטטוס"] = df["stock"].apply(
 )
 
 # =========================
-# 🏠 HEADER
+# 🚀 HEADER
 # =========================
-st.title("📊 מרכז בקרה למלאי – Inventory Control Center")
+st.title("🚀 AI CONTROL NEXT – מערכת מלאי חכמה")
 
 st.markdown("---")
 
 # =========================
-# 📌 KPI ROW (like dashboard cards)
+# 📊 KPI
 # =========================
 c1, c2, c3, c4 = st.columns(4)
 
-c1.metric("סה״כ פריטים", len(df))
+c1.metric("פריטים", len(df))
 c2.metric("סה״כ מלאי", int(df["stock"].sum()))
-c3.metric("אזל מהמלאי", int((df["stock"] == 0).sum()))
-c4.metric("מלאי נמוך", int((df["stock"] <= 2).sum()))
+c3.metric("אזל", int((df["stock"] == 0).sum()))
+c4.metric("נמוך", int((df["stock"] <= 2).sum()))
 
 st.markdown("---")
 
 # =========================
-# 🔎 SEARCH + FILTER PANEL
+# 🔎 SEARCH + FILTER
 # =========================
 col1, col2 = st.columns([1, 3])
 
 with col1:
-    search = st.text_input("🔎 חיפוש")
+    search = st.text_input("🔎 חיפוש חכם")
 
     company = st.multiselect("חברה", sorted(df["company"].unique()))
     type_f = st.multiselect("סוג", sorted(df["type"].unique()))
@@ -179,48 +211,36 @@ if type_f:
 if color:
     filtered = filtered[filtered["color"].isin(color)]
 
+st.markdown("---")
+
 # =========================
-# 🚨 ALERTS PANEL
+# 🚨 ALERTS
 # =========================
-st.markdown("## ⚠ התראות מערכת")
+st.subheader("⚠ מצב מערכת")
 
 a1, a2 = st.columns(2)
 
-with a1:
-    st.error(f"🔴 אזל מהמלאי: {(filtered['stock'] == 0).sum()}")
-
-with a2:
-    st.warning(f"🟠 מלאי נמוך: {(filtered['stock'] <= 2).sum()}")
+a1.error(f"🔴 אזל: {(filtered['stock'] == 0).sum()}")
+a2.warning(f"🟠 נמוך: {(filtered['stock'] <= 2).sum()}")
 
 st.markdown("---")
 
 # =========================
-# 📊 MAIN GRID (LIKE IMAGE)
+# 📊 GRID DASHBOARD
 # =========================
 left, middle, right = st.columns([1.2, 1.2, 2.6])
 
-# LEFT PANEL
 with left:
-    st.subheader("⏳ מלאי נמוך בזמן")
+    st.subheader("🔻 מלאי נמוך")
+    st.dataframe(filtered.sort_values("stock").head(8), use_container_width=True)
 
-    low = filtered.sort_values("stock").head(10)
-    st.dataframe(low, use_container_width=True)
-
-# MIDDLE PANEL
 with middle:
-    st.subheader("📈 סטטוס מלאי")
-
-    fig = px.pie(
-        filtered,
-        names="סטטוס",
-        values="stock"
-    )
+    st.subheader("📊 סטטוס")
+    fig = px.pie(filtered, names="סטטוס", values="stock")
     st.plotly_chart(fig, use_container_width=True)
 
-# RIGHT PANEL
 with right:
-    st.subheader("📦 מלאי מלא לפי חברה")
-
+    st.subheader("📦 מלאי לפי חברה")
     fig2 = px.bar(
         filtered.groupby("company")["stock"].sum().reset_index(),
         x="company",
@@ -231,9 +251,9 @@ with right:
 st.markdown("---")
 
 # =========================
-# 📋 FULL TABLE (CONTROL CENTER)
+# 🧾 TABLE
 # =========================
-st.subheader("🧾 טבלת שליטה מרכזית")
+st.subheader("📋 טבלת מלאי")
 
 st.dataframe(
     filtered.sort_values("stock", ascending=False),
