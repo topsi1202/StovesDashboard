@@ -17,49 +17,54 @@ if uploaded_file:
 
     df = pd.read_excel(uploaded_file)
 
-    # ---------- ניקוי עמודות ----------
+    # ---------- ניקוי ----------
     df.columns = df.columns.str.strip()
 
-    # ---------- המרה בטוחה של מלאי ----------
+    # ---------- מלאי בטוח ----------
     df["מלאי"] = pd.to_numeric(df["מלאי"], errors="coerce").fillna(0)
 
-    # ---------- קישור חיפוש גוגל ----------
-    df["קישור חיפוש"] = df.apply(
-        lambda row: "https://www.google.com/search?q=" +
-        urllib.parse.quote(f"{row['חברה']} {row['דגם']}"),
-        axis=1
+    # ---------- יצירת שאילתא ----------
+    df["שאילתא"] = df["חברה"] + " " + df["דגם"]
+
+    # ---------- לינקים ----------
+    df["גוגל"] = df["שאילתא"].apply(
+        lambda x: "https://www.google.com/search?q=" + urllib.parse.quote(x)
     )
 
+    df["תמונה"] = df["שאילתא"].apply(
+        lambda x: "https://www.google.com/search?tbm=isch&q=" + urllib.parse.quote(x)
+    )
+
+    df["KSP"] = df["שאילתא"].apply(
+        lambda x: "https://ksp.co.il/web/search?q=" + urllib.parse.quote(x)
+    )
+
+    df["IVORY"] = df["שאילתא"].apply(
+        lambda x: "https://www.ivory.co.il/catalog.php?act=cat&q=" + urllib.parse.quote(x)
+    )
+
+    df["ZAP"] = df["שאילתא"].apply(
+        lambda x: "https://www.zap.co.il/search.aspx?keyword=" + urllib.parse.quote(x)
+    )
+
+    # ---------- כותרת ----------
     st.title("📦 דשבורד מלאי כיריים")
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.metric(
-            "סה״כ פריטים",
-            len(df)
-        )
+        st.metric("סה״כ פריטים", len(df))
 
     with col2:
-        st.metric(
-            "סה״כ מלאי",
-            int(df["מלאי"].sum())
-        )
+        st.metric("סה״כ מלאי", int(df["מלאי"].sum()))
 
-    company = st.sidebar.multiselect(
-        "חברה",
-        df["חברה"].unique()
-    )
+    with col3:
+        st.metric("דגמים שונים", df["דגם"].nunique())
 
-    stove_type = st.sidebar.multiselect(
-        "סוג",
-        df["סוג"].unique()
-    )
-
-    color = st.sidebar.multiselect(
-        "צבע",
-        df["צבע"].unique()
-    )
+    # ---------- פילטרים ----------
+    company = st.sidebar.multiselect("חברה", df["חברה"].unique())
+    stove_type = st.sidebar.multiselect("סוג", df["סוג"].unique())
+    color = st.sidebar.multiselect("צבע", df["צבע"].unique())
 
     filtered = df.copy()
 
@@ -76,30 +81,31 @@ if uploaded_file:
 
     if search:
         filtered = filtered[
-            filtered["דגם"].astype(str).str.contains(
-                search,
-                case=False,
-                na=False
-            )
+            filtered["דגם"].astype(str).str.contains(search, case=False, na=False)
         ]
 
-    # ---------- טבלה עם לינק לחיץ ----------
+    # ---------- טבלה ----------
+    st.subheader("📊 טבלת מלאי עם קישורים")
+
     st.dataframe(
         filtered,
         column_config={
-            "קישור חיפוש": st.column_config.LinkColumn("חיפוש בגוגל")
+            "גוגל": st.column_config.LinkColumn("🔎 גוגל"),
+            "תמונה": st.column_config.LinkColumn("🖼️ תמונה"),
+            "KSP": st.column_config.LinkColumn("🛒 KSP"),
+            "IVORY": st.column_config.LinkColumn("🛒 Ivory"),
+            "ZAP": st.column_config.LinkColumn("🛒 Zap"),
         },
         use_container_width=True
     )
 
     # ---------- גרף ----------
+    st.subheader("📈 מלאי לפי חברה")
+
     chart = px.bar(
         filtered,
         x="חברה",
         y="מלאי"
     )
 
-    st.plotly_chart(
-        chart,
-        use_container_width=True
-    )
+    st.plotly_chart(chart, use_container_width=True)
