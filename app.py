@@ -4,87 +4,75 @@ import sqlite3
 import plotly.express as px
 
 # =========================
-# 🎨 UI FIXED PREMIUM STYLE
+# ⚙️ CONFIG
 # =========================
 st.set_page_config(
-    page_title="AI CONTROL NEXT",
-    layout="wide"
+    page_title="AI Inventory PRO",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
+# =========================
+# 🎨 CLEAN PREMIUM UI
+# =========================
 st.markdown("""
 <style>
 
-/* ===== MAIN BACKGROUND (FIXED) ===== */
+/* Background */
 .stApp {
-    background: linear-gradient(180deg, #0B1220 0%, #0F1B2D 100%);
+    background: #0B1220;
     color: #E5E7EB;
 }
 
-/* ===== CONTAINER ===== */
-.block-container {
-    padding: 2rem 2.5rem;
-}
-
-/* ===== HEADINGS ===== */
+/* Title */
 h1 {
-    color: #60A5FA !important;
+    color: #60A5FA;
     font-weight: 800;
+    letter-spacing: 0.5px;
 }
 
-h2, h3 {
-    color: #E5E7EB !important;
-}
-
-/* ===== KPI CARDS (FIXED VISIBILITY) ===== */
+/* Cards */
 [data-testid="metric-container"] {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    padding: 16px;
-    border-radius: 16px;
-    backdrop-filter: blur(10px);
-    box-shadow: 0 8px 20px rgba(0,0,0,0.35);
-}
-
-/* ===== DATAFRAME (CLEAN GRID) ===== */
-div[data-testid="stDataFrame"] {
-    background: rgba(255,255,255,0.03);
-    border-radius: 14px;
-    border: 1px solid rgba(255,255,255,0.1);
-}
-
-/* ===== SIDEBAR ===== */
-section[data-testid="stSidebar"] {
-    background-color: #0A0F1C;
-}
-
-/* ===== INPUTS ===== */
-input, .stTextInput > div > div > input {
-    background-color: rgba(255,255,255,0.05);
-    color: white;
-    border-radius: 10px;
-}
-
-/* ===== SELECT BOXES ===== */
-div[data-baseweb="select"] {
-    background-color: rgba(255,255,255,0.05);
-}
-
-/* ===== DIVIDERS ===== */
-hr {
+    background: rgba(255,255,255,0.05);
     border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    padding: 14px;
 }
 
-/* ===== BUTTONS ===== */
+/* Sidebar */
+section[data-testid="stSidebar"] {
+    background: #0A0F1C;
+}
+
+/* Inputs */
+input {
+    background: rgba(255,255,255,0.05) !important;
+    color: white !important;
+    border-radius: 10px !important;
+}
+
+/* Buttons */
 .stButton > button {
     background: linear-gradient(90deg, #3B82F6, #2563EB);
     color: white;
     border-radius: 10px;
     border: none;
-    padding: 0.5rem 1rem;
+    font-weight: 600;
 }
 
 .stButton > button:hover {
     background: linear-gradient(90deg, #2563EB, #1D4ED8);
+}
+
+/* Dataframe */
+div[data-testid="stDataFrame"] {
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+/* Divider */
+hr {
+    border: 1px solid rgba(255,255,255,0.08);
 }
 
 </style>
@@ -97,8 +85,7 @@ DB = "inventory.db"
 
 def init_db():
     conn = sqlite3.connect(DB)
-    c = conn.cursor()
-    c.execute("""
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS inventory (
             company TEXT,
             model TEXT,
@@ -107,22 +94,24 @@ def init_db():
             stock REAL
         )
     """)
-    conn.commit()
     conn.close()
 
-def save(df):
+@st.cache_data
+def load_data():
+    conn = sqlite3.connect(DB)
+    df = pd.read_sql("SELECT * FROM inventory", conn)
+    conn.close()
+    return df
+
+def save_data(df):
     conn = sqlite3.connect(DB)
     df.to_sql("inventory", conn, if_exists="replace", index=False)
     conn.close()
 
-def load():
-    conn = sqlite3.connect(DB)
-    return pd.read_sql("SELECT * FROM inventory", conn)
-
 init_db()
 
 # =========================
-# 📥 DATA
+# 📥 UPLOAD
 # =========================
 uploaded_file = st.file_uploader("📦 העלה קובץ מלאי", type=["xlsx"])
 
@@ -143,31 +132,36 @@ if uploaded_file:
 
     df["stock"] = pd.to_numeric(df["stock"], errors="coerce").fillna(0)
 
-    save(df)
-    st.success("✔ נתונים נטענו למערכת")
+    save_data(df)
+    st.success("✔ הנתונים נשמרו בהצלחה")
 
 # =========================
 # 📊 LOAD
 # =========================
-df = load()
+df = load_data()
 
 if df.empty:
-    st.warning("אין נתונים")
+    st.warning("אין נתונים במערכת")
     st.stop()
 
 # =========================
 # 🧠 ENGINE
 # =========================
-df["SKU"] = df["company"] + " " + df["model"]
+df["SKU"] = (df["company"] + "-" + df["model"]).str.upper()
 
-df["סטטוס"] = df["stock"].apply(
-    lambda x: "🔴 אזל" if x == 0 else ("🟠 נמוך" if x <= 2 else "🟢 תקין")
-)
+def status(x):
+    if x == 0:
+        return "🔴 אזל"
+    elif x <= 2:
+        return "🟠 נמוך"
+    return "🟢 תקין"
+
+df["סטטוס"] = df["stock"].apply(status)
 
 # =========================
-# 🚀 HEADER
+# 🚀 TITLE
 # =========================
-st.title("🚀 AI CONTROL NEXT – מערכת מלאי חכמה")
+st.title("🚀 AI CONTROL NEXT PRO")
 
 st.markdown("---")
 
@@ -184,12 +178,12 @@ c4.metric("נמוך", int((df["stock"] <= 2).sum()))
 st.markdown("---")
 
 # =========================
-# 🔎 SEARCH + FILTER
+# 🔎 FILTERS (SIDEBAR)
 # =========================
-col1, col2 = st.columns([1, 3])
+with st.sidebar:
+    st.header("🔎 פילטרים")
 
-with col1:
-    search = st.text_input("🔎 חיפוש חכם")
+    search = st.text_input("חיפוש SKU")
 
     company = st.multiselect("חברה", sorted(df["company"].unique()))
     type_f = st.multiselect("סוג", sorted(df["type"].unique()))
@@ -198,9 +192,7 @@ with col1:
 filtered = df.copy()
 
 if search:
-    filtered = filtered[
-        filtered["SKU"].str.contains(search, case=False, na=False)
-    ]
+    filtered = filtered[filtered["SKU"].str.contains(search.upper(), na=False)]
 
 if company:
     filtered = filtered[filtered["company"].isin(company)]
@@ -216,53 +208,59 @@ st.markdown("---")
 # =========================
 # 🚨 ALERTS
 # =========================
-st.subheader("⚠ מצב מערכת")
+col1, col2 = st.columns(2)
 
-a1, a2 = st.columns(2)
-
-a1.error(f"🔴 אזל: {(filtered['stock'] == 0).sum()}")
-a2.warning(f"🟠 נמוך: {(filtered['stock'] <= 2).sum()}")
+col1.error(f"🔴 אזל: {(filtered['stock'] == 0).sum()}")
+col2.warning(f"🟠 נמוך: {(filtered['stock'] <= 2).sum()}")
 
 st.markdown("---")
 
 # =========================
-# 📊 GRID DASHBOARD
+# 📊 CHARTS
 # =========================
-left, middle, right = st.columns([1.2, 1.2, 2.6])
+left, right = st.columns(2)
 
 with left:
-    st.subheader("🔻 מלאי נמוך")
-    st.dataframe(filtered.sort_values("stock").head(8), use_container_width=True)
-
-with middle:
-    st.subheader("📊 סטטוס")
-    fig = px.pie(filtered, names="סטטוס", values="stock")
+    st.subheader("📦 מלאי לפי חברה")
+    fig = px.bar(
+        filtered.groupby("company")["stock"].sum().reset_index(),
+        x="company",
+        y="stock",
+        text="stock"
+    )
     st.plotly_chart(fig, use_container_width=True)
 
 with right:
-    st.subheader("📦 מלאי לפי חברה")
-    fig2 = px.bar(
-        filtered.groupby("company")["stock"].sum().reset_index(),
-        x="company",
-        y="stock"
-    )
+    st.subheader("📊 סטטוס מלאי")
+    pie_df = filtered.groupby("סטטוס")["stock"].sum().reset_index()
+    fig2 = px.pie(pie_df, names="סטטוס", values="stock")
     st.plotly_chart(fig2, use_container_width=True)
 
 st.markdown("---")
 
 # =========================
-# 🧾 TABLE
+# 📋 TABLE (PREMIUM STYLE)
 # =========================
 st.subheader("📋 טבלת מלאי")
 
+def style(df):
+    def color(row):
+        if row["stock"] == 0:
+            return ["background-color: rgba(255,0,0,0.15)"] * len(row)
+        elif row["stock"] <= 2:
+            return ["background-color: rgba(255,165,0,0.15)"] * len(row)
+        return [""] * len(row)
+    return df.style.apply(color, axis=1)
+
 st.dataframe(
-    filtered.sort_values("stock", ascending=False),
-    use_container_width=True
+    style(filtered.sort_values("stock", ascending=False)),
+    use_container_width=True,
+    height=500
 )
 
 # =========================
 # 🧠 INSIGHT
 # =========================
-if len(filtered) > 0:
+if not filtered.empty:
     top = filtered.sort_values("stock", ascending=False).iloc[0]
     st.success(f"⭐ מוצר מוביל: {top['SKU']} ({int(top['stock'])})")
