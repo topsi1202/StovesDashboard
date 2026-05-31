@@ -3,12 +3,12 @@ import pandas as pd
 import plotly.express as px
 
 st.set_page_config(
-    page_title="OLYMPUS X - Inventory System",
+    page_title="OLYMPUS ULTRA Inventory",
     layout="wide"
 )
 
 # =========================
-# ⚡ LOAD + CACHE
+# ⚡ LOAD + CACHE ENGINE
 # =========================
 @st.cache_data
 def load_data(file):
@@ -23,12 +23,12 @@ if uploaded_file:
     df = load_data(uploaded_file)
 
     # =========================
-    # 🧼 CLEANING ENGINE (10x)
+    # 🧼 DATA CLEANING ENGINE
     # =========================
-    required_cols = ["חברה", "דגם", "סוג", "צבע"]
-
-    for col in required_cols:
-        if col in df.columns:
+    for col in ["חברה", "דגם", "סוג", "צבע"]:
+        if col not in df.columns:
+            df[col] = ""
+        else:
             df[col] = (
                 df[col]
                 .astype(str)
@@ -36,27 +36,31 @@ if uploaded_file:
                 .str.replace(r"\s+", " ", regex=True)
                 .fillna("")
             )
-        else:
-            df[col] = ""
 
-    if "מלאי" in df.columns:
-        df["מלאי"] = pd.to_numeric(df["מלאי"], errors="coerce").fillna(0)
-    else:
+    if "מלאי" not in df.columns:
         df["מלאי"] = 0
+    else:
+        df["מלאי"] = pd.to_numeric(df["מלאי"], errors="coerce").fillna(0)
 
     # =========================
     # 🧠 BUSINESS LAYER
     # =========================
     df["SKU"] = df["חברה"] + " " + df["דגם"]
 
-    df["סטטוס"] = df["מלאי"].apply(
-        lambda x: "🔴 אזל" if x == 0 else ("🟠 נמוך" if x <= 2 else "🟢 תקין")
-    )
+    def status(x):
+        if x == 0:
+            return "🔴 אזל"
+        elif x <= 2:
+            return "🟠 נמוך"
+        else:
+            return "🟢 תקין"
+
+    df["סטטוס"] = df["מלאי"].apply(status)
 
     # =========================
     # 📊 HEADER KPI
     # =========================
-    st.title("🚀 OLYMPUS X – מערכת מלאי מתקדמת")
+    st.title("🚀 OLYMPUS ULTRA – מערכת ניהול מלאי")
 
     col1, col2, col3, col4, col5 = st.columns(5)
 
@@ -108,34 +112,40 @@ if uploaded_file:
     st.divider()
 
     # =========================
-    # 🚨 ALERT ENGINE
+    # 🚨 ALERT SYSTEM
     # =========================
     low_stock = filtered[filtered["מלאי"] <= 2]
     zero_stock = filtered[filtered["מלאי"] == 0]
 
     if len(zero_stock) > 0:
-        st.error(f"❌ אזל מהמלאי: {len(zero_stock)} פריטים")
+        st.error(f"❌ אזל מהמלאי: {len(zero_stock)}")
 
     if len(low_stock) > 0:
-        st.warning(f"⚠️ מלאי נמוך: {len(low_stock)} פריטים")
+        st.warning(f"⚠️ מלאי נמוך: {len(low_stock)}")
 
     # =========================
-    # 🧾 DATA TABLE (ERP STYLE)
+    # ✏️ EDITABLE ERP TABLE
     # =========================
-    st.subheader("📦 מערכת מלאי חיה")
+    st.subheader("🧾 מערכת מלאי (עריכה חיה)")
 
-    show_cols = ["חברה", "דגם", "סוג", "צבע", "מלאי", "סטטוס"]
-
-    st.dataframe(
-        filtered[show_cols].sort_values("מלאי", ascending=False),
-        use_container_width=True
+    edited_df = st.data_editor(
+        filtered.sort_values("מלאי", ascending=False),
+        use_container_width=True,
+        num_rows="dynamic"
     )
+
+    # =========================
+    # 💾 SAVE ENGINE
+    # =========================
+    if st.button("💾 שמור שינויים לקובץ"):
+        edited_df.to_excel("inventory_updated.xlsx", index=False)
+        st.success("נשמר בהצלחה: inventory_updated.xlsx")
+
+    st.divider()
 
     # =========================
     # 📊 ANALYTICS ENGINE
     # =========================
-    st.divider()
-
     colg1, colg2 = st.columns(2)
 
     with colg1:
@@ -150,7 +160,7 @@ if uploaded_file:
         st.plotly_chart(fig1, use_container_width=True)
 
     with colg2:
-        st.subheader("🥧 התפלגות מלאי לפי סטטוס")
+        st.subheader("🥧 סטטוס מלאי")
 
         fig2 = px.pie(
             filtered,
@@ -168,6 +178,4 @@ if uploaded_file:
     if len(filtered) > 0:
         top = filtered.sort_values("מלאי", ascending=False).iloc[0]
 
-        st.success(
-            f"👑 מוצר מוביל: {top['SKU']} ({int(top['מלאי'])})"
-        )
+        st.success(f"👑 מוצר מוביל: {top['SKU']} ({int(top['מלאי'])})")
