@@ -1,181 +1,206 @@
 import streamlit as st
 import pandas as pd
+import sqlite3
 import plotly.express as px
 
 st.set_page_config(
-    page_title="OLYMPUS ULTRA Inventory",
+    page_title="OLYMPUS ENTERPRISE",
     layout="wide"
 )
 
+DB_NAME = "inventory.db"
+
 # =========================
-# ⚡ LOAD + CACHE ENGINE
+# 🗄️ DATABASE LAYER
 # =========================
-@st.cache_data
-def load_data(file):
-    df = pd.read_excel(file)
-    df.columns = df.columns.str.strip().str.replace("\n", "")
+def init_db():
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS inventory (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company TEXT,
+            model TEXT,
+            type TEXT,
+            color TEXT,
+            stock REAL
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+def insert_data(df):
+    conn = sqlite3.connect(DB_NAME)
+    df.to_sql("inventory", conn, if_exists="replace", index=False)
+    conn.close()
+
+def load_data():
+    conn = sqlite3.connect(DB_NAME)
+    df = pd.read_sql("SELECT * FROM inventory", conn)
+    conn.close()
     return df
 
+init_db()
+
+# =========================
+# 📥 UPLOAD + INGEST
+# =========================
 uploaded_file = st.file_uploader("📦 העלה קובץ מלאי", type=["xlsx"])
 
 if uploaded_file:
+    df = pd.read_excel(uploaded_file)
 
-    df = load_data(uploaded_file)
+    df.columns = df.columns.str.strip()
 
-    # =========================
-    # 🧼 DATA CLEANING ENGINE
-    # =========================
-    for col in ["חברה", "דגם", "סוג", "צבע"]:
-        if col not in df.columns:
-            df[col] = ""
-        else:
-            df[col] = (
-                df[col]
-                .astype(str)
-                .str.strip()
-                .str.replace(r"\s+", " ", regex=True)
-                .fillna("")
-            )
+    df = df.rename(columns={
+        "חברה": "company",
+        "דגם": "model",
+        "סוג": "type",
+        "צבע": "color",
+        "מלאי": "stock"
+    })
 
-    if "מלאי" not in df.columns:
-        df["מלאי"] = 0
-    else:
-        df["מלאי"] = pd.to_numeric(df["מלאי"], errors="coerce").fillna(0)
+    for col in ["company", "model", "type", "color"]:
+        df[col] = df[col].astype(str).str.strip()
 
-    # =========================
-    # 🧠 BUSINESS LAYER
-    # =========================
-    df["SKU"] = df["חברה"] + " " + df["דגם"]
+    df["stock"] = pd.to_numeric(df["stock"], errors="coerce").fillna(0)
 
-    def status(x):
-        if x == 0:
-            return "🔴 אזל"
-        elif x <= 2:
-            return "🟠 נמוך"
-        else:
-            return "🟢 תקין"
+    insert_data(df)
+    st.success("📡 הנתונים נטענו למסד הנתונים")
 
-    df["סטטוס"] = df["מלאי"].apply(status)
+# =========================
+# 📊 LOAD FROM DB
+# =========================
+df = load_data()
 
-    # =========================
-    # 📊 HEADER KPI
-    # =========================
-    st.title("🚀 OLYMPUS ULTRA – מערכת ניהול מלאי")
+if df.empty:
+    st.warning("אין נתונים עדיין – העלה קובץ Excel")
+    st.stop()
 
-    col1, col2, col3, col4, col5 = st.columns(5)
+# =========================
+# 🧠 BUSINESS LAYER
+# =========================
+df["SKU"] = df["company"] + " " + df["model"]
 
-    col1.metric("פריטים", len(df))
-    col2.metric("סה״כ מלאי", int(df["מלאי"].sum()))
-    col3.metric("אזל", int((df["מלאי"] == 0).sum()))
-    col4.metric("נמוך", int((df["מלאי"] <= 2).sum()))
-    col5.metric("דגמים", df["דגם"].nunique())
+def status(x):
+    if x == 0:
+        return "🔴 אזל"
+    elif x <= 2:
+        return "🟠 נמוך"
+    return "🟢 תקין"
 
-    st.divider()
+df["status"] = df["stock"].apply(status)
 
-    # =========================
-    # 🔎 SEARCH ENGINE
-    # =========================
-    search = st.text_input("🔎 חיפוש חכם (חברה / דגם / SKU)")
+# =========================
+# 📊 HEADER KPIs
+# =========================
+st.title("🚀 OLYMPUS ENTERPRISE MODE")
 
-    filtered = df.copy()
+col1, col2, col3, col4, col5 = st.columns(5)
 
-    if search:
-        filtered = filtered[
-            filtered["SKU"].str.contains(search, case=False, na=False) |
-            filtered["חברה"].str.contains(search, case=False, na=False) |
-            filtered["דגם"].str.contains(search, case=False, na=False)
-        ]
+col1.metric("פריטים", len(df))
+col2.metric("סה״כ מלאי", int(df["stock"].sum()))
+col3.metric("אזל", int((df["stock"] == 0).sum()))
+col4.metric("נמוך", int((df["stock"] <= 2).sum()))
+col5.metric("דגמים", df["model"].nunique())
 
-    # =========================
-    # 🎛 FILTER ENGINE
-    # =========================
-    colf1, colf2, colf3 = st.columns(3)
+st.divider()
 
-    with colf1:
-        company = st.multiselect("חברה", sorted(filtered["חברה"].unique()))
+# =========================
+# 🔎 SEARCH ENGINE
+# =========================
+search = st.text_input("🔎 חיפוש ENTERPRISE")
 
-    with colf2:
-        stove_type = st.multiselect("סוג", sorted(filtered["סוג"].unique()))
+filtered = df.copy()
 
-    with colf3:
-        color = st.multiselect("צבע", sorted(filtered["צבע"].unique()))
+if search:
+    filtered = filtered[
+        filtered["SKU"].str.contains(search, case=False, na=False) |
+        filtered["company"].str.contains(search, case=False, na=False) |
+        filtered["model"].str.contains(search, case=False, na=False)
+    ]
 
-    if company:
-        filtered = filtered[filtered["חברה"].isin(company)]
+# =========================
+# 🎛 FILTER ENGINE
+# =========================
+colf1, colf2, colf3 = st.columns(3)
 
-    if stove_type:
-        filtered = filtered[filtered["סוג"].isin(stove_type)]
+with colf1:
+    company = st.multiselect("חברה", sorted(filtered["company"].unique()))
 
-    if color:
-        filtered = filtered[filtered["צבע"].isin(color)]
+with colf2:
+    type_f = st.multiselect("סוג", sorted(filtered["type"].unique()))
 
-    st.divider()
+with colf3:
+    color = st.multiselect("צבע", sorted(filtered["color"].unique()))
 
-    # =========================
-    # 🚨 ALERT SYSTEM
-    # =========================
-    low_stock = filtered[filtered["מלאי"] <= 2]
-    zero_stock = filtered[filtered["מלאי"] == 0]
+if company:
+    filtered = filtered[filtered["company"].isin(company)]
 
-    if len(zero_stock) > 0:
-        st.error(f"❌ אזל מהמלאי: {len(zero_stock)}")
+if type_f:
+    filtered = filtered[filtered["type"].isin(type_f)]
 
-    if len(low_stock) > 0:
-        st.warning(f"⚠️ מלאי נמוך: {len(low_stock)}")
+if color:
+    filtered = filtered[filtered["color"].isin(color)]
 
-    # =========================
-    # ✏️ EDITABLE ERP TABLE
-    # =========================
-    st.subheader("🧾 מערכת מלאי (עריכה חיה)")
+st.divider()
 
-    edited_df = st.data_editor(
-        filtered.sort_values("מלאי", ascending=False),
-        use_container_width=True,
-        num_rows="dynamic"
+# =========================
+# ✏️ LIVE EDIT + WRITE BACK
+# =========================
+st.subheader("🧾 עריכה חיה (נשמר למסד נתונים)")
+
+edited = st.data_editor(filtered, use_container_width=True, num_rows="dynamic")
+
+if st.button("💾 שמור שינויים"):
+    insert_data(edited)
+    st.success("✔ הנתונים עודכנו במסד הנתונים")
+
+st.divider()
+
+# =========================
+# 🚨 ALERTS
+# =========================
+low = filtered[filtered["stock"] <= 2]
+
+if len(low) > 0:
+    st.warning(f"⚠️ מלאי נמוך: {len(low)}")
+
+# =========================
+# 📊 ANALYTICS
+# =========================
+colg1, colg2 = st.columns(2)
+
+with colg1:
+    st.subheader("📈 מלאי לפי חברה")
+
+    fig = px.bar(
+        filtered.groupby("company")["stock"].sum().reset_index(),
+        x="company",
+        y="stock"
     )
 
-    # =========================
-    # 💾 SAVE ENGINE
-    # =========================
-    if st.button("💾 שמור שינויים לקובץ"):
-        edited_df.to_excel("inventory_updated.xlsx", index=False)
-        st.success("נשמר בהצלחה: inventory_updated.xlsx")
+    st.plotly_chart(fig, use_container_width=True)
 
-    st.divider()
+with colg2:
+    st.subheader("🥧 סטטוס מלאי")
 
-    # =========================
-    # 📊 ANALYTICS ENGINE
-    # =========================
-    colg1, colg2 = st.columns(2)
+    fig2 = px.pie(
+        filtered,
+        names="status",
+        values="stock"
+    )
 
-    with colg1:
-        st.subheader("📈 מלאי לפי חברה")
+    st.plotly_chart(fig2, use_container_width=True)
 
-        fig1 = px.bar(
-            filtered.groupby("חברה")["מלאי"].sum().reset_index(),
-            x="חברה",
-            y="מלאי"
-        )
+# =========================
+# 🧠 INSIGHT ENGINE
+# =========================
+st.divider()
 
-        st.plotly_chart(fig1, use_container_width=True)
+if len(filtered) > 0:
+    top = filtered.sort_values("stock", ascending=False).iloc[0]
 
-    with colg2:
-        st.subheader("🥧 סטטוס מלאי")
-
-        fig2 = px.pie(
-            filtered,
-            names="סטטוס",
-            values="מלאי"
-        )
-
-        st.plotly_chart(fig2, use_container_width=True)
-
-    # =========================
-    # 🧠 INSIGHT ENGINE
-    # =========================
-    st.divider()
-
-    if len(filtered) > 0:
-        top = filtered.sort_values("מלאי", ascending=False).iloc[0]
-
-        st.success(f"👑 מוצר מוביל: {top['SKU']} ({int(top['מלאי'])})")
+    st.success(f"👑 מוצר מוביל: {top['SKU']} ({int(top['stock'])})")
