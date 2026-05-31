@@ -3,23 +3,56 @@ import pandas as pd
 import sqlite3
 import plotly.express as px
 
+# =========================
+# 🎨 NASA CONTROL UI
+# =========================
 st.set_page_config(
-    page_title="OLYMPUS ENTERPRISE",
-    layout="wide"
+    page_title="NASA INVENTORY CONTROL",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-DB_NAME = "inventory.db"
+st.markdown("""
+<style>
+body {
+    background-color: #0B0F19;
+    color: #E5E7EB;
+}
+
+.stApp {
+    background-color: #0B0F19;
+}
+
+h1, h2, h3 {
+    color: #38BDF8;
+    font-family: Arial;
+    letter-spacing: 1px;
+}
+
+div[data-testid="metric-container"] {
+    background-color: #111827;
+    border: 1px solid #1F2937;
+    padding: 12px;
+    border-radius: 10px;
+}
+
+.stDataFrame {
+    border: 1px solid #1F2937;
+}
+
+</style>
+""", unsafe_allow_html=True)
 
 # =========================
-# 🗄️ DATABASE LAYER
+# 🗄️ CLOUD DATABASE LAYER
 # =========================
+DB = "cloud_inventory.db"
+
 def init_db():
-    conn = sqlite3.connect(DB_NAME)
+    conn = sqlite3.connect(DB)
     c = conn.cursor()
-
     c.execute("""
         CREATE TABLE IF NOT EXISTS inventory (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
             company TEXT,
             model TEXT,
             type TEXT,
@@ -27,17 +60,16 @@ def init_db():
             stock REAL
         )
     """)
-
     conn.commit()
     conn.close()
 
-def insert_data(df):
-    conn = sqlite3.connect(DB_NAME)
+def save(df):
+    conn = sqlite3.connect(DB)
     df.to_sql("inventory", conn, if_exists="replace", index=False)
     conn.close()
 
-def load_data():
-    conn = sqlite3.connect(DB_NAME)
+def load():
+    conn = sqlite3.connect(DB)
     df = pd.read_sql("SELECT * FROM inventory", conn)
     conn.close()
     return df
@@ -45,9 +77,9 @@ def load_data():
 init_db()
 
 # =========================
-# 📥 UPLOAD + INGEST
+# 📥 DATA INGEST
 # =========================
-uploaded_file = st.file_uploader("📦 העלה קובץ מלאי", type=["xlsx"])
+uploaded_file = st.file_uploader("📡 UPLOAD INVENTORY DATA", type=["xlsx"])
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
@@ -62,56 +94,55 @@ if uploaded_file:
         "מלאי": "stock"
     })
 
-    for col in ["company", "model", "type", "color"]:
-        df[col] = df[col].astype(str).str.strip()
+    for c in ["company", "model", "type", "color"]:
+        df[c] = df[c].astype(str).str.strip()
 
     df["stock"] = pd.to_numeric(df["stock"], errors="coerce").fillna(0)
 
-    insert_data(df)
-    st.success("📡 הנתונים נטענו למסד הנתונים")
+    save(df)
+    st.success("🟢 DATA LOADED INTO CLOUD SYSTEM")
 
 # =========================
-# 📊 LOAD FROM DB
+# 📊 LOAD SYSTEM STATE
 # =========================
-df = load_data()
+df = load()
 
 if df.empty:
-    st.warning("אין נתונים עדיין – העלה קובץ Excel")
+    st.warning("⚠ NO DATA IN SYSTEM")
     st.stop()
 
 # =========================
-# 🧠 BUSINESS LAYER
+# 🧠 ENGINE LAYER
 # =========================
 df["SKU"] = df["company"] + " " + df["model"]
 
 def status(x):
     if x == 0:
-        return "🔴 אזל"
+        return "🔴 CRITICAL"
     elif x <= 2:
-        return "🟠 נמוך"
-    return "🟢 תקין"
+        return "🟠 WARNING"
+    return "🟢 OK"
 
 df["status"] = df["stock"].apply(status)
 
 # =========================
-# 📊 HEADER KPIs
+# 🚀 HEADER (MISSION CONTROL)
 # =========================
-st.title("🚀 OLYMPUS ENTERPRISE MODE")
+st.title("🚀 NASA INVENTORY CONTROL CENTER")
 
-col1, col2, col3, col4, col5 = st.columns(5)
+col1, col2, col3, col4 = st.columns(4)
 
-col1.metric("פריטים", len(df))
-col2.metric("סה״כ מלאי", int(df["stock"].sum()))
-col3.metric("אזל", int((df["stock"] == 0).sum()))
-col4.metric("נמוך", int((df["stock"] <= 2).sum()))
-col5.metric("דגמים", df["model"].nunique())
+col1.metric("TOTAL ASSETS", len(df))
+col2.metric("TOTAL STOCK", int(df["stock"].sum()))
+col3.metric("CRITICAL", int((df["stock"] == 0).sum()))
+col4.metric("LOW STOCK", int((df["stock"] <= 2).sum()))
 
 st.divider()
 
 # =========================
-# 🔎 SEARCH ENGINE
+# 🔎 SEARCH
 # =========================
-search = st.text_input("🔎 חיפוש ENTERPRISE")
+search = st.text_input("🔎 SEARCH SYSTEM")
 
 filtered = df.copy()
 
@@ -123,18 +154,18 @@ if search:
     ]
 
 # =========================
-# 🎛 FILTER ENGINE
+# 🎛 CONTROL FILTERS
 # =========================
 colf1, colf2, colf3 = st.columns(3)
 
 with colf1:
-    company = st.multiselect("חברה", sorted(filtered["company"].unique()))
+    company = st.multiselect("COMPANY", sorted(filtered["company"].unique()))
 
 with colf2:
-    type_f = st.multiselect("סוג", sorted(filtered["type"].unique()))
+    type_f = st.multiselect("TYPE", sorted(filtered["type"].unique()))
 
 with colf3:
-    color = st.multiselect("צבע", sorted(filtered["color"].unique()))
+    color = st.multiselect("COLOR", sorted(filtered["color"].unique()))
 
 if company:
     filtered = filtered[filtered["company"].isin(company)]
@@ -148,44 +179,45 @@ if color:
 st.divider()
 
 # =========================
-# ✏️ LIVE EDIT + WRITE BACK
+# 🚨 ALERT SYSTEM
 # =========================
-st.subheader("🧾 עריכה חיה (נשמר למסד נתונים)")
+critical = filtered[filtered["stock"] == 0]
+warning = filtered[filtered["stock"] <= 2]
 
-edited = st.data_editor(filtered, use_container_width=True, num_rows="dynamic")
+if len(critical) > 0:
+    st.error(f"🚨 CRITICAL FAILURE: {len(critical)} ITEMS OUT OF STOCK")
 
-if st.button("💾 שמור שינויים"):
-    insert_data(edited)
-    st.success("✔ הנתונים עודכנו במסד הנתונים")
-
-st.divider()
-
-# =========================
-# 🚨 ALERTS
-# =========================
-low = filtered[filtered["stock"] <= 2]
-
-if len(low) > 0:
-    st.warning(f"⚠️ מלאי נמוך: {len(low)}")
+if len(warning) > 0:
+    st.warning(f"⚠ WARNING: {len(warning)} LOW STOCK ITEMS")
 
 # =========================
-# 📊 ANALYTICS
+# 🧾 CONTROL TABLE
+# =========================
+st.subheader("📡 LIVE INVENTORY GRID")
+
+st.dataframe(
+    filtered.sort_values("stock", ascending=False),
+    use_container_width=True
+)
+
+# =========================
+# 📊 ANALYTICS PANEL
 # =========================
 colg1, colg2 = st.columns(2)
 
 with colg1:
-    st.subheader("📈 מלאי לפי חברה")
+    st.subheader("📈 STOCK BY COMPANY")
 
-    fig = px.bar(
+    fig1 = px.bar(
         filtered.groupby("company")["stock"].sum().reset_index(),
         x="company",
         y="stock"
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig1, use_container_width=True)
 
 with colg2:
-    st.subheader("🥧 סטטוס מלאי")
+    st.subheader("🥧 STATUS DISTRIBUTION")
 
     fig2 = px.pie(
         filtered,
@@ -196,11 +228,11 @@ with colg2:
     st.plotly_chart(fig2, use_container_width=True)
 
 # =========================
-# 🧠 INSIGHT ENGINE
+# 🧠 FINAL INSIGHT
 # =========================
 st.divider()
 
 if len(filtered) > 0:
     top = filtered.sort_values("stock", ascending=False).iloc[0]
 
-    st.success(f"👑 מוצר מוביל: {top['SKU']} ({int(top['stock'])})")
+    st.success(f"🛰 PRIMARY ASSET: {top['SKU']} | STOCK: {int(top['stock'])}")
