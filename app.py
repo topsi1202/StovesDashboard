@@ -3,25 +3,31 @@ import pandas as pd
 import plotly.express as px
 
 st.set_page_config(
-    page_title="OLYMPUS מלאי כיריים",
+    page_title="OLYMPUS X - Inventory System",
     layout="wide"
 )
 
-# ---------- טעינה ----------
+# =========================
+# ⚡ LOAD + CACHE
+# =========================
 @st.cache_data
 def load_data(file):
     df = pd.read_excel(file)
     df.columns = df.columns.str.strip().str.replace("\n", "")
     return df
 
-uploaded_file = st.file_uploader("העלה קובץ מלאי", type=["xlsx"])
+uploaded_file = st.file_uploader("📦 העלה קובץ מלאי", type=["xlsx"])
 
 if uploaded_file:
 
     df = load_data(uploaded_file)
 
-    # ---------- ניקוי ----------
-    for col in ["חברה", "דגם", "סוג", "צבע"]:
+    # =========================
+    # 🧼 CLEANING ENGINE (10x)
+    # =========================
+    required_cols = ["חברה", "דגם", "סוג", "צבע"]
+
+    for col in required_cols:
         if col in df.columns:
             df[col] = (
                 df[col]
@@ -30,36 +36,55 @@ if uploaded_file:
                 .str.replace(r"\s+", " ", regex=True)
                 .fillna("")
             )
+        else:
+            df[col] = ""
 
     if "מלאי" in df.columns:
         df["מלאי"] = pd.to_numeric(df["מלאי"], errors="coerce").fillna(0)
     else:
         df["מלאי"] = 0
 
-    st.title("⚡ OLYMPUS – דשבורד מלאי מתקדם")
+    # =========================
+    # 🧠 BUSINESS LAYER
+    # =========================
+    df["SKU"] = df["חברה"] + " " + df["דגם"]
 
-    # ---------- KPI ----------
-    col1, col2, col3, col4 = st.columns(4)
+    df["סטטוס"] = df["מלאי"].apply(
+        lambda x: "🔴 אזל" if x == 0 else ("🟠 נמוך" if x <= 2 else "🟢 תקין")
+    )
+
+    # =========================
+    # 📊 HEADER KPI
+    # =========================
+    st.title("🚀 OLYMPUS X – מערכת מלאי מתקדמת")
+
+    col1, col2, col3, col4, col5 = st.columns(5)
 
     col1.metric("פריטים", len(df))
     col2.metric("סה״כ מלאי", int(df["מלאי"].sum()))
-    col3.metric("אזל מהמלאי", int((df["מלאי"] == 0).sum()))
-    col4.metric("מלאי נמוך", int((df["מלאי"] <= 2).sum()))
+    col3.metric("אזל", int((df["מלאי"] == 0).sum()))
+    col4.metric("נמוך", int((df["מלאי"] <= 2).sum()))
+    col5.metric("דגמים", df["דגם"].nunique())
 
     st.divider()
 
-    # ---------- חיפוש ----------
-    search = st.text_input("🔎 חיפוש חכם (חברה / דגם)")
+    # =========================
+    # 🔎 SEARCH ENGINE
+    # =========================
+    search = st.text_input("🔎 חיפוש חכם (חברה / דגם / SKU)")
 
     filtered = df.copy()
 
     if search:
         filtered = filtered[
+            filtered["SKU"].str.contains(search, case=False, na=False) |
             filtered["חברה"].str.contains(search, case=False, na=False) |
             filtered["דגם"].str.contains(search, case=False, na=False)
         ]
 
-    # ---------- פילטרים ----------
+    # =========================
+    # 🎛 FILTER ENGINE
+    # =========================
     colf1, colf2, colf3 = st.columns(3)
 
     with colf1:
@@ -82,38 +107,39 @@ if uploaded_file:
 
     st.divider()
 
-    # ---------- התראות ----------
+    # =========================
+    # 🚨 ALERT ENGINE
+    # =========================
     low_stock = filtered[filtered["מלאי"] <= 2]
-
-    if len(low_stock) > 0:
-        st.warning(f"⚠️ {len(low_stock)} מוצרים עם מלאי נמוך")
-
     zero_stock = filtered[filtered["מלאי"] == 0]
 
     if len(zero_stock) > 0:
-        st.error(f"❌ {len(zero_stock)} מוצרים אזלו מהמלאי")
+        st.error(f"❌ אזל מהמלאי: {len(zero_stock)} פריטים")
 
-    # ---------- עריכה בתוך הטבלה ----------
-    st.subheader("🛠️ עריכת מלאי (בלייב)")
+    if len(low_stock) > 0:
+        st.warning(f"⚠️ מלאי נמוך: {len(low_stock)} פריטים")
 
-    edited_df = st.data_editor(
-        filtered,
-        num_rows="dynamic",
+    # =========================
+    # 🧾 DATA TABLE (ERP STYLE)
+    # =========================
+    st.subheader("📦 מערכת מלאי חיה")
+
+    show_cols = ["חברה", "דגם", "סוג", "צבע", "מלאי", "סטטוס"]
+
+    st.dataframe(
+        filtered[show_cols].sort_values("מלאי", ascending=False),
         use_container_width=True
     )
 
-    # ---------- שמירה ----------
-    if st.button("💾 שמור שינויים לקובץ Excel"):
-        edited_df.to_excel("updated_inventory.xlsx", index=False)
-        st.success("נשמר בהצלחה לקובץ updated_inventory.xlsx")
-
+    # =========================
+    # 📊 ANALYTICS ENGINE
+    # =========================
     st.divider()
 
-    # ---------- גרפים ----------
     colg1, colg2 = st.columns(2)
 
     with colg1:
-        st.subheader("📈 טופ חברות")
+        st.subheader("📈 מלאי לפי חברה")
 
         fig1 = px.bar(
             filtered.groupby("חברה")["מלאי"].sum().reset_index(),
@@ -124,22 +150,24 @@ if uploaded_file:
         st.plotly_chart(fig1, use_container_width=True)
 
     with colg2:
-        st.subheader("🔥 טופ דגמים")
+        st.subheader("🥧 התפלגות מלאי לפי סטטוס")
 
-        fig2 = px.bar(
-            filtered.groupby("דגם")["מלאי"].sum().reset_index(),
-            x="דגם",
-            y="מלאי"
+        fig2 = px.pie(
+            filtered,
+            names="סטטוס",
+            values="מלאי"
         )
 
         st.plotly_chart(fig2, use_container_width=True)
 
+    # =========================
+    # 🧠 INSIGHT ENGINE
+    # =========================
     st.divider()
 
-    # ---------- תובנה ----------
     if len(filtered) > 0:
         top = filtered.sort_values("מלאי", ascending=False).iloc[0]
 
         st.success(
-            f"👑 מוצר מוביל: {top['חברה']} {top['דגם']} ({int(top['מלאי'])})"
+            f"👑 מוצר מוביל: {top['SKU']} ({int(top['מלאי'])})"
         )
