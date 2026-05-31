@@ -3,13 +3,13 @@ st.markdown("""
 
 /* ===== BASE BACKGROUND ===== */
 .stApp {
-    background: #0F172A; /* slate-900 אבל רך */
+    background: #0F172A;
     color: #E2E8F0;
 }
 
 /* ===== TITLE ===== */
 h1 {
-    color: #38BDF8 !important; /* sky blue מודרני */
+    color: #38BDF8 !important;
     font-weight: 800;
     letter-spacing: 0.5px;
 }
@@ -23,10 +23,12 @@ h1 {
     box-shadow: 0 10px 25px rgba(0,0,0,0.25);
 }
 
-/* metric numbers */
+/* metric labels */
 [data-testid="metric-container"] label {
     color: #94A3B8 !important;
 }
+
+/* metric values */
 [data-testid="metric-container"] div {
     color: #F1F5F9 !important;
 }
@@ -43,12 +45,6 @@ input {
     color: #F8FAFC !important;
     border: 1px solid #24324A !important;
     border-radius: 10px !important;
-}
-
-/* ===== SELECT BOX ===== */
-div[data-baseweb="select"] {
-    background: #111C33 !important;
-    border-radius: 10px;
 }
 
 /* ===== BUTTONS ===== */
@@ -76,7 +72,7 @@ hr {
     border: 1px solid #1E293B;
 }
 
-/* ===== TEXT CLEANUP ===== */
+/* ===== TEXT ===== */
 p, span {
     color: #CBD5E1;
 }
