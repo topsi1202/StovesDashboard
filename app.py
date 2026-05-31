@@ -7,11 +7,11 @@ st.set_page_config(
     layout="wide"
 )
 
-# ---------- CACHE לטעינה מהירה ----------
+# ---------- טעינה מהירה ----------
 @st.cache_data
 def load_data(file):
     df = pd.read_excel(file)
-    df.columns = df.columns.str.strip()
+    df.columns = df.columns.str.strip().str.replace("\n", "")
     return df
 
 uploaded_file = st.file_uploader(
@@ -23,7 +23,7 @@ if uploaded_file:
 
     df = load_data(uploaded_file)
 
-    # ---------- ניקוי מתקדם ----------
+    # ---------- ניקוי חכם ----------
     for col in ["חברה", "דגם", "סוג", "צבע"]:
         if col in df.columns:
             df[col] = (
@@ -34,6 +34,7 @@ if uploaded_file:
                 .fillna("")
             )
 
+    # ---------- מלאי ----------
     if "מלאי" in df.columns:
         df["מלאי"] = pd.to_numeric(df["מלאי"], errors="coerce").fillna(0)
     else:
@@ -42,12 +43,14 @@ if uploaded_file:
     # ---------- KPI ----------
     st.title("📦 דשבורד מלאי כיריים")
 
+    avg_stock = df["מלאי"].mean() if len(df) else 0
+
     col1, col2, col3, col4 = st.columns(4)
 
     col1.metric("פריטים", len(df))
     col2.metric("סה״כ מלאי", int(df["מלאי"].sum()))
-    col3.metric("אזל מהמלאי", int((df["מלאי"] == 0).sum()))
-    col4.metric("מלאי נמוך", int((df["מלאי"] <= 2).sum()))
+    col3.metric("ממוצע מלאי", round(avg_stock, 1))
+    col4.metric("אזל מהמלאי", int((df["מלאי"] == 0).sum()))
 
     st.divider()
 
@@ -74,8 +77,8 @@ if uploaded_file:
     if color:
         filtered = filtered[filtered["צבע"].isin(color)]
 
-    # ---------- חיפוש חכם ----------
-    search = st.text_input("🔎 חיפוש חכם (חברה / דגם)")
+    # ---------- חיפוש ----------
+    search = st.text_input("🔎 חיפוש (חברה / דגם)")
 
     if search:
         search = search.strip()
@@ -88,16 +91,20 @@ if uploaded_file:
 
     # ---------- התראות ----------
     low_stock = filtered[filtered["מלאי"] <= 2]
+    zero_stock = filtered[filtered["מלאי"] == 0]
 
     if len(low_stock) > 0:
-        st.warning(f"⚠️ נמצאו {len(low_stock)} פריטים עם מלאי נמוך")
+        st.warning(f"⚠️ יש {len(low_stock)} מוצרים עם מלאי נמוך")
 
         st.dataframe(
             low_stock.sort_values("מלאי"),
             use_container_width=True
         )
 
-    # ---------- טבלה ראשית ----------
+    if len(zero_stock) > 0:
+        st.error(f"❌ יש {len(zero_stock)} מוצרים שאזלו מהמלאי")
+
+    # ---------- טבלה ----------
     st.subheader("📊 מלאי לפי דגמים")
 
     st.dataframe(
@@ -107,11 +114,11 @@ if uploaded_file:
 
     st.divider()
 
-    # ---------- גרפים חכמים ----------
+    # ---------- גרפים מתקדמים ----------
     colg1, colg2 = st.columns(2)
 
     with colg1:
-        st.subheader("📈 טופ חברות לפי מלאי")
+        st.subheader("📈 טופ 10 חברות")
 
         top_company = filtered.groupby("חברה")["מלאי"].sum().reset_index()
 
@@ -124,12 +131,14 @@ if uploaded_file:
         st.plotly_chart(fig1, use_container_width=True)
 
     with colg2:
-        st.subheader("🥧 סוגי כיריים")
+        st.subheader("🔥 טופ 10 דגמים")
 
-        fig2 = px.pie(
-            filtered,
-            names="סוג",
-            values="מלאי"
+        top_models = filtered.groupby("דגם")["מלאי"].sum().reset_index()
+
+        fig2 = px.bar(
+            top_models.sort_values("מלאי", ascending=False).head(10),
+            x="דגם",
+            y="מלאי"
         )
 
         st.plotly_chart(fig2, use_container_width=True)
@@ -141,5 +150,5 @@ if uploaded_file:
         top_item = filtered.sort_values("מלאי", ascending=False).iloc[0]
 
         st.success(
-            f"🔥 הפריט החזק ביותר: {top_item['חברה']} {top_item['דגם']} ({int(top_item['מלאי'])})"
+            f"🔥 מוצר מוביל: {top_item['חברה']} {top_item['דגם']} ({int(top_item['מלאי'])})"
         )
